@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mod id="c2cc524c-5e59-4633-a660-a226e0a4a0b2" version="1">
+    <Properties>
+        <Name>Auto Production Queue</Name>
+        <Description>Automatically fills each city's production queue when necessary.</Description>
+        <Teaser>Sneaky Queue</Teaser>
+        <Authors>satoon101</Authors>
+        <CompatibleVersions>2.0</CompatibleVersions>
+    </Properties>
+
+    <InGameActions>
+
+        <AddUserInterfaces id="ProductionQueue">
+            <Properties>
+                <Context>InGame</Context>
+            </Properties>
+            <File>scripts/UI/AutoProductionQueue.xml</File>
+        </AddUserInterfaces>
+
+        <AddGameplayScripts id="AutoQueueScript">
+            <File>scripts/Gameplay/AutoProductionQueue_TierData.lua</File>
+        </AddGameplayScripts>
+
+        <ImportFiles id="AutoProductionQueueImports">
+            <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
+        </ImportFiles>
+
+    </InGameActions>
+
+    <Files>
+        <File>scripts/Gameplay/AutoProductionQueue_TierData.lua</File>
+        <File>scripts/UI/AutoProductionQueue.lua</File>
+        <File>scripts/UI/AutoProductionQueue.xml</File>
+        <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
+    </Files>
+</Mod>
