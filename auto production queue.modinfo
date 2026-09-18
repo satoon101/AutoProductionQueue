@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Mod id="c2cc524c-5e59-4633-a660-a226e0a4a0b2" version="1">
+
     <Properties>
         <Name>Auto Production Queue</Name>
         <Description>Automatically fills each city's production queue when necessary.</Description>
@@ -33,4 +34,5 @@
         <File>scripts/UI/AutoProductionQueue.xml</File>
         <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
     </Files>
+
 </Mod>
