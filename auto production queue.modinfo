@@ -18,21 +18,22 @@
             <File>scripts/UI/AutoProductionQueue.xml</File>
         </AddUserInterfaces>
 
-        <AddGameplayScripts id="AutoQueueScript">
-            <File>scripts/Gameplay/AutoProductionQueue_TierData.lua</File>
-        </AddGameplayScripts>
-
         <ImportFiles id="AutoProductionQueueImports">
+            <File>scripts/UI/AutoProductionQueue_Config.lua</File>
+            <File>scripts/UI/AutoProductionQueue_Constants.lua</File>
             <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
+            <File>scripts/UI/AutoProductionQueue_Managers.lua</File>
         </ImportFiles>
 
     </InGameActions>
 
     <Files>
-        <File>scripts/Gameplay/AutoProductionQueue_TierData.lua</File>
+        <File>scripts/UI/AutoProductionQueue_Config.lua</File>
+        <File>scripts/UI/AutoProductionQueue_Constants.lua</File>
+        <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
+        <File>scripts/UI/AutoProductionQueue_Managers.lua</File>
         <File>scripts/UI/AutoProductionQueue.lua</File>
         <File>scripts/UI/AutoProductionQueue.xml</File>
-        <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
     </Files>
 
 </Mod>
