@@ -326,20 +326,8 @@ function CityProductionQueueManager:GetNewItemToWork(
     end
 
     -- finish wonder
-    local wonderInfo = GameInfo.Buildings[self.wonderName]
-    if wonderInfo ~= nil then
-        local district = self.districts:GetDistrict(WONDER_INDEX)
-        if district ~= nil then
-            local location = district:GetLocation()
-            local buildings = self.queue:GetConstructionsAtLocation(location)
-            if (
-                #buildings > 0 and
-                self.eraToComplete <= currentEraIndex
-            ) then
-                wonderInfo = GameInfo.Buildings[buildings[1]]
-                return PARAM_BUILDING_TYPE, wonderInfo.Hash
-            end
-        end
+    if self:CanFinishWonder(currentEraIndex) then
+        return PARAM_BUILDING_TYPE, GameInfo.Buildings[self.wonderName].Hash
     end
 
     -- new district
@@ -462,13 +450,24 @@ function CityProductionQueueManager:GetBuildingToBuildForWonder()
     return nil
 end
 
-function CityProductionQueueManager:CanCompleteWonder(currentEraIndex)
-    local info = GameInfo.Buildings[self.wonderName]
-    if info == nil then
-        return false
+function CityProductionQueueManager:CanFinishWonder(currentEraIndex)
+    local wonderInfo = GameInfo.Buildings[self.wonderName]
+    if wonderInfo ~= nil then
+        local district = self.districts:GetDistrict(WONDER_INDEX)
+        if district ~= nil then
+            local location = district:GetLocation()
+            local buildings = self.queue:GetConstructionsAtLocation(location)
+            if (
+                #buildings > 0 and
+                self.eraToComplete <= currentEraIndex
+            ) then
+                wonderInfo = GameInfo.Buildings[buildings[1]]
+                return true
+            end
+        end
     end
 
-    local eraOffset = WONDER_ERA_OFFSET_EXCEPTIONS[self.wonderName]
+    return false
 end
 
 function CityProductionQueueManager:CanBuildWonder()
