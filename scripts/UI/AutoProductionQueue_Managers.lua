@@ -65,13 +65,16 @@ function CityProductionQueueManager:new(playerID, cityID)
         end
     end
 
+    local districts = city:GetDistricts()
+    local buildings = city:GetBuildings()
+    local queue = city:GetBuildQueue()
     if wonderName == nil then
-        local district = self.districts:GetDistrict(WONDER_INDEX)
+        local district = districts:GetDistrict(WONDER_INDEX)
         if district ~= nil then
             local buildingType = nil
             local location = district:GetLocation()
-            local buildings = self.buildings:GetBuildingsAtLocation(location)
-            local buildings2 = self.queue:GetConstructionsAtLocation(location)
+            local buildings = buildings:GetBuildingsAtLocation(location)
+            local buildings2 = queue:GetConstructionsAtLocation(location)
             if #buildings > 0 then
                 buildingType = buildings[1]
             elseif #buildings > 0 then
@@ -83,7 +86,7 @@ function CityProductionQueueManager:new(playerID, cityID)
                 wonderName = wonderInfo.BuildingType
             end
         elseif (
-            self.districts:GetDistrict(DIPLOMATIC_QUARTER_DISTRICT_INDEX)
+            districts:GetDistrict(DIPLOMATIC_QUARTER_DISTRICT_INDEX)
         ) then
             wonderName = "DISTRICT_DIPLOMATIC_QUARTER"
         end
@@ -111,9 +114,9 @@ function CityProductionQueueManager:new(playerID, cityID)
         wonderName = wonderName,
         eraToComplete = eraToComplete,
         city = city,
-        queue = city:GetBuildQueue(),
-        districts = city:GetDistricts(),
-        buildings = city:GetBuildings(),
+        queue = queue,
+        districts = districts,
+        buildings = buildings,
         prereqDistrict = prereqDistrict,
         prereqBuildings = prereqBuildings,
         mapPinPlotsByName = {}
