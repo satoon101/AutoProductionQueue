@@ -73,12 +73,12 @@ function CityProductionQueueManager:new(playerID, cityID)
         if district ~= nil then
             local buildingType = nil
             local location = district:GetLocation()
-            local buildings = buildings:GetBuildingsAtLocation(location)
-            local buildings2 = queue:GetConstructionsAtLocation(location)
-            if #buildings > 0 then
-                buildingType = buildings[1]
-            elseif #buildings > 0 then
+            local buildings2 = buildings:GetBuildingsAtLocation(location)
+            local buildings3 = queue:GetConstructionsAtLocation(location)
+            if #buildings2 > 0 then
                 buildingType = buildings2[1]
+            elseif #buildings3 > 0 then
+                buildingType = buildings3[1]
             end
 
             if buildingType ~= nil then
@@ -154,7 +154,6 @@ end
 function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
     hasBorderControlEffects, currentEraIndex
 )
-
     local item = self.queue:GetAt(0)
     local info = (
         GameInfo.Buildings[item.BuildingType]
@@ -165,11 +164,13 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
     end
 
     if currentEraIndex == CLASSICAL_ERA_INDEX then
+        -- Stonehenge, Pyramids, and Ancestral Hall should be completed
+        --      asap in the Classical era.
         if (
             self.wonderName == "BUILDING_STONEHENGE" or
             self.wonderName == "BUILDING_PYRAMIDS"
         ) then
-            local hash = GameInfo.Buildings[self.wonderName]
+            local hash = GameInfo.Buildings[self.wonderName].Hash
             if (
                 self.queue:CanProduce(hash) and
                 self.queue:GetCurrentProductionTypeHash() ~= hash
