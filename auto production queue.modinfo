@@ -11,6 +11,14 @@
 
     <InGameActions>
 
+        <ReplaceUIScript id="CustomActionPanel">
+            <Properties>
+                <LoadOrder>870</LoadOrder>
+                <LuaContext>ActionPanel</LuaContext>
+                <LuaReplace>scripts/UI/ActionPanel_PreTurnEnd.lua</LuaReplace>
+            </Properties>
+        </ReplaceUIScript>
+
         <AddUserInterfaces id="ProductionQueue">
             <Properties>
                 <Context>InGame</Context>
@@ -28,6 +36,7 @@
     </InGameActions>
 
     <Files>
+        <File>scripts/UI/ActionPanel_PreTurnEnd.lua</File>
         <File>scripts/UI/AutoProductionQueue_Config.lua</File>
         <File>scripts/UI/AutoProductionQueue_Constants.lua</File>
         <File>scripts/UI/AutoProductionQueue_Helpers.lua</File>
