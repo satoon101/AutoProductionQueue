@@ -80,7 +80,7 @@ local function ReplaceItemsInQueue(playerID)
     end
 end
 
-Events.PlayerTurnDeactivated.Add(ReplaceItemsInQueue)
+LuaEvents.PreTurnEnd.Add(ReplaceItemsInQueue)
 
 function PurchaseMonumentInCapital(playerID, civic)
     if civic ~= FOREIGN_TRADE_INDEX then
