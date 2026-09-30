@@ -42,6 +42,7 @@ function CityProductionQueueManager:new(playerID, cityID)
     -- We only need these prereqs if there is still a map pin
     local prereqDistrict = nil
     local prereqBuildings = nil
+    local prereqBuildingHashes = nil
     if wonderName ~= nil and wonderInfo ~= nil then
         prereqDistrict = wonderInfo.AdjacentDistrict
         if (
@@ -52,10 +53,12 @@ function CityProductionQueueManager:new(playerID, cityID)
             local districtInfo = GameInfo.Districts[prereqInfo.prereqDistrict]
             prereqDistrict = districtInfo.DistrictType
             prereqBuildings = {}
+            prereqBuildingHashes = {}
             local function StorePrereqsForBuilding(info)
                 if #info.PrereqBuildingCollection > 0 then
                     for i = 1, #info.PrereqBuildingCollection do
                         local newInfo = info.PrereqBuildingCollection[i]
+                        prereqBuildingHashes[newInfo.Hash] = true
                         table.insert(prereqBuildings, newInfo.BuildingType)
                         StorePrereqsForBuilding(newInfo)
                     end
@@ -119,6 +122,7 @@ function CityProductionQueueManager:new(playerID, cityID)
         buildings = buildings,
         prereqDistrict = prereqDistrict,
         prereqBuildings = prereqBuildings,
+        prereqBuildingHashes = prereqBuildingHashes,
         mapPinPlotsByName = {}
     }
 
@@ -148,12 +152,37 @@ function CityProductionQueueManager:RefreshMapPinMapping()
 end
 
 function CityProductionQueueManager:NeedsNewItemToWork()
-    return self.queue:GetAt(0) == nil
+    local size = self.queue:GetSize()
+    if size > 1 then
+        return
+    end
+
+    if size == 0 then
+        return true
+    end
+
+    local item = self.queue:GetAt(0)
+    local info = (
+        GameInfo.Buildings[item.BuildingType]
+        or GameInfo.Districts[item.DistrictType]
+        or GameInfo.Projects[item.ProjectType]
+        or GameInfo.Units[item.UnitType]
+    )
+    local turnsLeft = self.queue:GetTurnsLeft(info.Hash)
+    if turnsLeft <= 2 then
+        return true
+    end
+    return false
 end
 
 function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
     hasBorderControlEffects, currentEraIndex
 )
+    local size = self.queue:GetSize()
+    if size == 0 then
+        return false
+    end
+
     local item = self.queue:GetAt(0)
     local info = (
         GameInfo.Buildings[item.BuildingType]
@@ -187,6 +216,8 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
         end
     end
 
+    -- TODO: this needs testing when an example of a wonder
+    --      with 2 turns left is built the following turn.
     if self.queue:GetTurnsLeft(info.Hash) > 1 then
         return false
     end
@@ -262,7 +293,7 @@ function CityProductionQueueManager:CanProduceDistrict(districtType)
 end
 
 function CityProductionQueueManager:GetNewItemToWork(
-    hasBorderControlEffects, currentEraIndex
+    hasBorderControlEffects, currentEraIndex, newHash
 )
     -- first turn of the classical era
     if currentEraIndex == CLASSICAL_ERA_INDEX then
@@ -270,8 +301,9 @@ function CityProductionQueueManager:GetNewItemToWork(
             self.wonderName == "BUILDING_STONEHENGE" or
             self.wonderName == "BUILDING_PYRAMIDS"
         ) then
-            local hash = GameInfo.Buildings[self.wonderName]
+            local hash = GameInfo.Buildings[self.wonderName].Hash
             if (
+                hash ~= newHash and
                 self.queue:CanProduce(hash) and
                 self.queue:GetCurrentProductionTypeHash() ~= hash
             ) then
@@ -279,42 +311,38 @@ function CityProductionQueueManager:GetNewItemToWork(
             end
         elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
             if (
+                newHash ~= GOV_WIDE_HASH and
                 self.queue:CanProduce(GOV_WIDE_HASH) and
                 self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
             ) then
-                return PARAM_PROJECT_TYPE, GOV_WIDE_HASH
+                return PARAM_BUILDING_TYPE, GOV_WIDE_HASH
             end
         end
     end
 
     -- repair
-    local paramType, hash = self:FindRepairable()
+    local paramType, hash = self:FindRepairable(newHash)
     if paramType ~= nil and hash ~= nil then
         return paramType, hash
     end
 
     self:RefreshMapPinMapping()
 
-    -- builder (if map pin)
-    if self:HasBuilderMapPin() then
-        return PARAM_UNIT_TYPE, BUILDER_HASH
-    end
-
     -- district for wonder
-    if self:CanBuildDistrictForWonder() then
+    if self:CanBuildDistrictForWonder(newHash) then
         local info = GameInfo.Districts[self.prereqDistrict]
         local plotID = self.mapPinPlotsByName[self.prereqDistrict]
         return PARAM_DISTRICT_TYPE, info.Hash, plotID
     end
 
     -- building for wonder
-    hash = self:GetBuildingToBuildForWonder()
+    hash = self:GetBuildingToBuildForWonder(newHash)
     if hash ~= nil then
         return PARAM_BUILDING_TYPE, hash
     end
 
     -- wonder
-    if self:CanBuildWonder() then
+    if self:CanBuildWonder(newHash) then
         local info = GameInfo.Buildings[self.wonderName]
         local plotID = self.mapPinPlotsByName[self.wonderName]
         return PARAM_BUILDING_TYPE, info.Hash, plotID
@@ -322,7 +350,7 @@ function CityProductionQueueManager:GetNewItemToWork(
 
     -- finish district
     if hasBorderControlEffects then
-        local districtType = self:GetFinishDistrictBuild()
+        local districtType = self:GetFinishDistrictBuild(newHash)
         if districtType ~= nil then
             local info = GameInfo.Districts[districtType]
             return PARAM_DISTRICT_TYPE, info.Hash
@@ -330,12 +358,12 @@ function CityProductionQueueManager:GetNewItemToWork(
     end
 
     -- finish wonder
-    if self:CanFinishWonder(currentEraIndex) then
+    if self:CanFinishWonder(currentEraIndex, newHash) then
         return PARAM_BUILDING_TYPE, GameInfo.Buildings[self.wonderName].Hash
     end
 
     -- new district
-    local districtType = self:GetBuildNewDistrictType()
+    local districtType = self:GetBuildNewDistrictType(newHash)
     if districtType ~= nil then
         local info = GameInfo.Districts[districtType]
         local plotID = self.mapPinPlotsByName[districtType]
@@ -343,26 +371,29 @@ function CityProductionQueueManager:GetNewItemToWork(
     end
 
     -- new building
-    local buildingType = self:GetBuildNewBuildingType()
+    local buildingType = self:GetBuildNewBuildingType(newHash)
     if buildingType ~= nil then
         local info = GameInfo.Buildings[buildingType]
         return PARAM_BUILDING_TYPE, info.Hash
     end
 
     -- siege
-    hash = self:GetUnitToBuild("PROMOTION_CLASS_SIEGE")
+    hash = self:GetUnitToBuild("PROMOTION_CLASS_SIEGE", newHash)
     if hash ~= nil then
         return PARAM_UNIT_TYPE, hash
     end
 
     -- heavy cavalry
-    hash = self:GetUnitToBuild("PROMOTION_CLASS_HEAVY_CAVALRY")
+    hash = self:GetUnitToBuild("PROMOTION_CLASS_HEAVY_CAVALRY", newHash)
     if hash ~= nil then
         return PARAM_UNIT_TYPE, hash
     end
 
     -- bread and circuses
-    if self.queue:CanProduce(BREAD_AND_CIRCUSES_HASH) then
+    if (
+        newHash ~= BREAD_AND_CIRCUSES_HASH and
+        self.queue:CanProduce(BREAD_AND_CIRCUSES_HASH)
+    ) then
         return PARAM_PROJECT_TYPE, BREAD_AND_CIRCUSES_HASH
     end
 
@@ -387,7 +418,7 @@ function CityProductionQueueManager:ShouldReactorBeRecommissioned()
     return false
 end
 
-function CityProductionQueueManager:FindRepairable()
+function CityProductionQueueManager:FindRepairable(newHash)
     for _, district in self.districts:Members() do
         local location = district:GetLocation()
         local districtBuildings = self.buildings:GetBuildingsAtLocation(
@@ -396,6 +427,7 @@ function CityProductionQueueManager:FindRepairable()
         for _, building in ipairs(districtBuildings) do
             local info = GameInfo.Buildings[building]
             if (
+                info.Hash ~= newHash and
                 self.buildings:IsPillaged(info.BuildingType)
                 and self.queue:CanProduce(info.Hash)
             ) then
@@ -405,6 +437,7 @@ function CityProductionQueueManager:FindRepairable()
 
         local info = GameInfo.Districts[district:GetType()]
         if (
+            info.Hash ~= newHash and
             district:IsPillaged() and
             self.queue:CanProduce(info.Hash)
         ) then
@@ -413,16 +446,23 @@ function CityProductionQueueManager:FindRepairable()
     end
 end
 
-function CityProductionQueueManager:HasBuilderMapPin()
-    return self.mapPinPlotsByName["UNIT_BUILDER"] ~= nil
+function CityProductionQueueManager:HasBuilderMapPin(newHash)
+    return (
+        newHash ~= BUILDER_HASH and
+        self.mapPinPlotsByName["UNIT_BUILDER"] ~= nil
+    )
 end
 
-function CityProductionQueueManager:CanBuildDistrictForWonder()
+function CityProductionQueueManager:CanBuildDistrictForWonder(newHash)
     if self.prereqDistrict == nil then
         return false
     end
 
     local info = GameInfo.Districts[self.prereqDistrict]
+    if info.Hash == newHash then
+        return false
+    end
+
     local districtType = info.DistrictType
     if not HasPrerequisiteCivicOrTech(self.playerID, info) then
         return false
@@ -431,15 +471,22 @@ function CityProductionQueueManager:CanBuildDistrictForWonder()
     return self.mapPinPlotsByName[districtType] ~= nil
 end
 
-function CityProductionQueueManager:GetBuildingToBuildForWonder()
+function CityProductionQueueManager:GetBuildingToBuildForWonder(newHash)
     if self.prereqBuildings == nil or #self.prereqBuildings == 0 then
+        return nil
+    end
+
+    if self.prereqBuildingHashes[newHash] ~= nil then
         return nil
     end
 
     for i = 1, #self.prereqBuildings do
         local building = self.prereqBuildings[i]
         local info = GameInfo.Buildings[building]
-        if self.queue:CanProduce(info.Hash) then
+        if (
+            info.Hash ~= newHash and
+            self.queue:CanProduce(info.Hash)
+        ) then
             if not ExposedMembers.ProductionPanel.IsBuildingBlocked(
                 self.playerID, self.cityID, info.prereqDistrict,
                 building, false
@@ -454,9 +501,12 @@ function CityProductionQueueManager:GetBuildingToBuildForWonder()
     return nil
 end
 
-function CityProductionQueueManager:CanFinishWonder(currentEraIndex)
+function CityProductionQueueManager:CanFinishWonder(currentEraIndex, newHash)
     local wonderInfo = GameInfo.Buildings[self.wonderName]
-    if wonderInfo ~= nil then
+    if (
+        wonderInfo ~= nil and
+        wonderInfo.Hash ~= newHash
+    ) then
         local district = self.districts:GetDistrict(WONDER_INDEX)
         if district ~= nil then
             local location = district:GetLocation()
@@ -474,7 +524,7 @@ function CityProductionQueueManager:CanFinishWonder(currentEraIndex)
     return false
 end
 
-function CityProductionQueueManager:CanBuildWonder()
+function CityProductionQueueManager:CanBuildWonder(newHash)
     local plotID = self.mapPinPlotsByName[self.wonderName]
     if plotID == nil then
         return false
@@ -490,6 +540,10 @@ function CityProductionQueueManager:CanBuildWonder()
     end
 
     local row = GameInfo.Buildings[self.wonderName]
+    if row.Hash == newHash then
+        return
+    end
+
     local hasPrereq = HasPrerequisiteCivicOrTech(self.playerID, row)
     if not hasPrereq then
         return false
@@ -498,17 +552,21 @@ function CityProductionQueueManager:CanBuildWonder()
     return self.queue:CanProduce(row.Hash)
 end
 
-function CityProductionQueueManager:GetFinishDistrictBuild()
+function CityProductionQueueManager:GetFinishDistrictBuild(newHash)
     for _, district in self.districts:Members() do
         if not district:IsComplete() then
-            return district:GetType()
+            local districtType = district:GetType()
+            local info = GameInfo.Districts[districtType]
+            if info.Hash ~= newHash then
+                return districtType
+            end
         end
     end
 
     return nil
 end
 
-function CityProductionQueueManager:GetBuildNewDistrictType()
+function CityProductionQueueManager:GetBuildNewDistrictType(newHash)
     for i = 1, #DistrictBuildOrder do
         local districtType = DistrictBuildOrder[i]
         local info = GameInfo.Districts[districtType]
@@ -522,6 +580,7 @@ function CityProductionQueueManager:GetBuildNewDistrictType()
                 and city:GetID() == self.cityID
             ) then
                 if (
+                    info.Hash ~= newHash and
                     self.queue:CanProduce(info.Hash) and
                     self:CanProduceDistrict(districtType) and
                     not ExposedMembers.ProductionPanel.IsDistrictBlocked(
@@ -539,7 +598,7 @@ function CityProductionQueueManager:GetBuildNewDistrictType()
     return nil
 end
 
-function CityProductionQueueManager:GetBuildNewBuildingType()
+function CityProductionQueueManager:GetBuildNewBuildingType(newHash)
     for i = 1, #DistrictBuildOrder do
         local districtType = DistrictBuildOrder[i]
         local info = GameInfo.Districts[districtType]
@@ -547,6 +606,7 @@ function CityProductionQueueManager:GetBuildNewBuildingType()
             for n = 1, #info.BuildingCollectionReference do
                 local row = info.BuildingCollectionReference[n]
                 if (
+                    row.Hash ~= newHash and
                     not row.InternalOnly and
                     self.queue:CanProduce(row.Hash) and
                     not ExposedMembers.ProductionPanel.IsBuildingBlocked(
@@ -566,7 +626,7 @@ function CityProductionQueueManager:GetBuildNewBuildingType()
     end
 end
 
-function CityProductionQueueManager:GetUnitToBuild(promotionClass)
+function CityProductionQueueManager:GetUnitToBuild(promotionClass, newHash)
     local allowedCount = UnitPromotionClassCounts[promotionClass]
     if allowedCount == nil then
         return nil
@@ -581,10 +641,31 @@ function CityProductionQueueManager:GetUnitToBuild(promotionClass)
 
     for row in GameInfo.Units() do
         if (
+            row.Hash ~= newHash and
             row.PromotionClass == promotionClass
             and self.queue:CanProduce(row.Hash)
         ) then
             return row.Hash
+        end
+    end
+end
+
+function CityProductionQueueManager:RemoveBuilderMapPin()
+    local plotID = self.mapPinPlotsByName["UNIT_BUILDER"]
+    if plotID ~= nil and plotID == self.plotID then
+        local config = PlayerConfigurations[self.playerID]
+        for pinID, pin in pairs(config:GetMapPins()) do
+            local x = pin:GetHexX()
+            local y = pin:GetHexY()
+            local pinPlot = Map.GetPlot(x, y)
+            local pinPlotID = pinPlot:GetIndex()
+            if pinPlotID == plotID then
+                config:DeleteMapPin(pinID)
+                Network.BroadcastPlayerInfo()
+                LuaEvents.MapPinPopup_OnDelete(
+                    self.playerID, pinID, pin:GetIconName(), x, y
+                )
+            end
         end
     end
 end
