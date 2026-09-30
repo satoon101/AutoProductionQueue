@@ -7,48 +7,11 @@ print("=== Auto Production Queue (UI) Loading ===")
 
 include("AutoProductionQueue_Managers")
 
-local function FillEmptyQueues(playerID)
-    local player = Players[playerID]
-    if player == nil or not player:IsHuman() then
-        return
+function UpdateItemsInQueue(playerID)
+    if playerID == nil then
+        playerID = Game.GetLocalPlayer()
     end
 
-    local hasBorderControlEffects = DoesPlayerHaveBorderControlEffects(
-        playerID
-    )
-    local currentTurn = Game.GetCurrentGameTurn()
-    local eras = Game.GetEras()
-    local currentEraIndex = eras:GetCurrentEra()
-    local currentEraStartTurn = eras:GetCurrentEraStartTurn()
-    local isEraStartTurn = currentTurn == currentEraStartTurn
-    local cities = player:GetCities()
-    for _, city in cities:Members() do
-        local obj = CityProductionQueueManager:new(playerID, city:GetID())
-        if (
-            obj ~= nil and obj:NeedsNewItemToWork()
-        ) then
-            local paramType, hash, plotID = obj:GetNewItemToWork(
-                hasBorderControlEffects, currentEraIndex, isEraStartTurn
-            )
-            if paramType ~= nil and hash ~= nil then
-                AppendItemToQueue(city, hash, paramType, plotID)
-                -- If we're adding bread and circuses,
-                --      try to add carbon recapture, as well
-                if hash == BREAD_AND_CIRCUSES_HASH then
-                    if obj.queue:CanProduce(CARBON_RECAPTURE_HASH) then
-                        AppendItemToQueue(
-                            city, CARBON_RECAPTURE_HASH, PARAM_PROJECT_TYPE
-                        )
-                    end
-                end
-            end
-        end
-    end
-end
-
-Events.PlayerTurnActivated.Add(FillEmptyQueues)
-
-local function ReplaceItemsInQueue(playerID)
     local player = Players[playerID]
     if player == nil or not player:IsHuman() then
         return
@@ -63,24 +26,52 @@ local function ReplaceItemsInQueue(playerID)
     for _, city in cities:Members() do
         local obj = CityProductionQueueManager:new(playerID, city:GetID())
         if obj ~= nil then
+            local hash = nil
             if obj:FirstQueueItemNeedsReplaced(
                 hasBorderControlEffects, currentEraIndex
             ) then
-                local paramType, hash, plotID = obj:GetNewItemToWork(
+                local paramType, replaceHash, plotID = obj:GetNewItemToWork(
                     hasBorderControlEffects, currentEraIndex
                 )
-                ReplaceIndexInQueue(city, 0, hash, paramType, plotID)
+                hash = replaceHash
+                ReplaceIndexInQueue(city, 0, replaceHash, paramType, plotID)
             end
-
-            local paramType, hash = obj:FindItemToPrependQueue()
-            if paramType ~= nil and hash ~= nil then
-                PrependItemToQueue(city, hash, paramType)
+            if obj:NeedsNewItemToWork() then
+                local paramType, newHash, plotID = obj:GetNewItemToWork(
+                    hasBorderControlEffects, currentEraIndex, hash
+                )
+                AppendItemToQueue(city, newHash, paramType, plotID)
+            end
+        end
+        local paramType, hash = obj:FindItemToPrependQueue()
+        if paramType ~= nil and hash ~= nil then
+            PrependItemToQueue(city, hash, paramType)
+            if hash == BUILDER_HASH then
+                obj:RemoveBuilderMapPin()
             end
         end
     end
 end
 
-LuaEvents.PreTurnEnd.Add(ReplaceItemsInQueue)
+function OnPreTurnEnd(playerID)
+    if not IsFirstTurnOfNewEra() then
+        return
+    end
+
+    UpdateItemsInQueue(playerID)
+end
+
+LuaEvents.PreTurnEnd.Add(OnPreTurnEnd)
+
+function OnPlayerTurnActivated(playerID)
+    if IsFirstTurnOfNewEra() then
+        return
+    end
+
+    UpdateItemsInQueue(playerID)
+end
+
+Events.PlayerTurnActivated.Add(OnPlayerTurnActivated)
 
 function PurchaseMonumentInCapital(playerID, civic)
     if civic ~= FOREIGN_TRADE_INDEX then
