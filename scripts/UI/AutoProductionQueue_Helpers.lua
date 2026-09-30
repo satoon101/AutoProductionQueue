@@ -85,6 +85,12 @@ function PurchaseMonument(city)
     CityManager.RequestCommand(city, CityCommandTypes.PURCHASE, params)
 end
 
+function IsFirstTurnOfNewEra()
+    local eraStartTurn = Game.GetEras():GetCurrentEraStartTurn()
+    local currentTurn = Game.GetCurrentGameTurn()
+    return eraStartTurn == currentTurn
+end
+
 function AppendItemToQueue(
     city, newItemHash, paramType, plotID
 )
