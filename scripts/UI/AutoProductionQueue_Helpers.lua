@@ -91,6 +91,15 @@ function IsFirstTurnOfNewEra()
     return eraStartTurn == currentTurn
 end
 
+function GetInfoFromQueueItem(item)
+    return (
+        GameInfo.Buildings[item.BuildingType]
+        or GameInfo.Districts[item.DistrictType]
+        or GameInfo.Projects[item.ProjectType]
+        or GameInfo.Units[item.UnitType]
+    )
+end
+
 function AppendItemToQueue(
     city, newItemHash, paramType, plotID
 )
@@ -116,6 +125,14 @@ function ReplaceIndexInQueue(
     params[paramType] = newItemHash
     params[PARAM_INSERT_MODE] = VALUE_REPLACE_AT
     params[PARAM_QUEUE_DESTINATION_LOCATION] = index
+    CityManager.RequestOperation(city, CityOperationTypes.BUILD, params)
+end
+
+function SwapItemsInQueue(city, sourceIndex, destIndex, plotID)
+    local params = GetCoordinateParamsFromPlot(plotID)
+    params[PARAM_INSERT_MODE] = VALUE_SWAP
+    params[PARAM_QUEUE_SOURCE_LOCATION] = sourceIndex
+    params[PARAM_QUEUE_DESTINATION_LOCATION] = destIndex
     CityManager.RequestOperation(city, CityOperationTypes.BUILD, params)
 end
 

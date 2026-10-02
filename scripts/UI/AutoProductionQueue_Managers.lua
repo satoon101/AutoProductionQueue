@@ -162,12 +162,7 @@ function CityProductionQueueManager:NeedsNewItemToWork()
     end
 
     local item = self.queue:GetAt(0)
-    local info = (
-        GameInfo.Buildings[item.BuildingType]
-        or GameInfo.Districts[item.DistrictType]
-        or GameInfo.Projects[item.ProjectType]
-        or GameInfo.Units[item.UnitType]
-    )
+    local info = GetInfoFromQueueItem(item)
     local turnsLeft = self.queue:GetTurnsLeft(info.Hash)
     if turnsLeft <= 2 then
         return true
@@ -184,40 +179,35 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
     end
 
     local item = self.queue:GetAt(0)
-    local info = (
-        GameInfo.Buildings[item.BuildingType]
-        or GameInfo.Districts[item.DistrictType]
-    )
+    local info = GetInfoFromQueueItem(item)
     if info == nil then
         return false
     end
 
-    if currentEraIndex == CLASSICAL_ERA_INDEX then
-        -- Stonehenge, Pyramids, and Ancestral Hall should be completed
-        --      asap in the Classical era.
-        if (
-            self.wonderName == "BUILDING_STONEHENGE" or
-            self.wonderName == "BUILDING_PYRAMIDS"
-        ) then
-            local hash = GameInfo.Buildings[self.wonderName].Hash
-            if (
-                self.queue:CanProduce(hash) and
-                self.queue:GetCurrentProductionTypeHash() ~= hash
-            ) then
-                return true
-            end
-        elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
-            if (
-                self.queue:CanProduce(GOV_WIDE_HASH) and
-                self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
-            ) then
-                return true
-            end
-        end
-    end
+    -- if currentEraIndex == CLASSICAL_ERA_INDEX then
+    --     -- Stonehenge, Pyramids, and Ancestral Hall should be completed
+    --     --      asap in the Classical era.
+    --     if (
+    --         self.wonderName == "BUILDING_STONEHENGE" or
+    --         self.wonderName == "BUILDING_PYRAMIDS"
+    --     ) then
+    --         local hash = GameInfo.Buildings[self.wonderName].Hash
+    --         if (
+    --             self.queue:CanProduce(hash) and
+    --             self.queue:GetCurrentProductionTypeHash() ~= hash
+    --         ) then
+    --             return true
+    --         end
+    --     elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
+    --         if (
+    --             self.queue:CanProduce(GOV_WIDE_HASH) and
+    --             self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
+    --         ) then
+    --             return true
+    --         end
+    --     end
+    -- end
 
-    -- TODO: this needs testing when an example of a wonder
-    --      with 2 turns left is built the following turn.
     if self.queue:GetTurnsLeft(info.Hash) > 1 then
         return false
     end
@@ -233,6 +223,10 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
             return false
         end
 
+        if item.DistrictType == GOVERNMENT_INDEX then
+            return false
+        end
+
         return true
     end
 
@@ -245,7 +239,26 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
     return false
 end
 
-function CityProductionQueueManager:FindItemToPrependQueue()
+function CityProductionQueueManager:FindItemToPrependQueue(currentEraIndex)
+    -- at the beginning of the classical era, make sure the Stonehenge,
+    --      Pyramids, and Ancestral Hall are actively being worked on, so they
+    --      can be finished as soon as possible.
+    if currentEraIndex == CLASSICAL_ERA_INDEX then
+        if (
+            self.wonderName == "BUILDING_STONEHENGE" or
+            self.wonderName == "BUILDING_PYRAMIDS"
+        ) then
+            local hash = GameInfo.Buildings[self.wonderName].Hash
+            if self.queue:CanProduce(hash) then
+                return PARAM_BUILDING_TYPE, hash
+            end
+        elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
+            if self.queue:CanProduce(GOV_WIDE_HASH) then
+                return PARAM_BUILDING_TYPE, GOV_WIDE_HASH
+            end
+        end
+    end
+
     -- reactor
     if self:ShouldReactorBeRecommissioned() then
         return PARAM_PROJECT_TYPE, RECOMMISSION_REACTOR_HASH
@@ -266,6 +279,19 @@ function CityProductionQueueManager:FindItemToPrependQueue()
     end
 
     return nil, nil
+end
+
+function CityProductionQueueManager:GetItemIndexFromCurrentQueue(hash)
+    local length = self.queue:GetSize()
+    for i = 0, length - 1 do
+        local item = self.queue:GetAt(i)
+        local info = GetInfoFromQueueItem(item)
+        if info.Hash == hash then
+            return i
+        end
+    end
+
+    return nil
 end
 
 function CityProductionQueueManager:CanProduceDistrict(districtType)
@@ -293,35 +319,43 @@ function CityProductionQueueManager:CanProduceDistrict(districtType)
 end
 
 function CityProductionQueueManager:GetNewItemToWork(
-    hasBorderControlEffects, currentEraIndex, newHash
+    hasBorderControlEffects, currentEraIndex
 )
-    -- first turn of the classical era
-    if currentEraIndex == CLASSICAL_ERA_INDEX then
-        if (
-            self.wonderName == "BUILDING_STONEHENGE" or
-            self.wonderName == "BUILDING_PYRAMIDS"
-        ) then
-            local hash = GameInfo.Buildings[self.wonderName].Hash
-            if (
-                hash ~= newHash and
-                self.queue:CanProduce(hash) and
-                self.queue:GetCurrentProductionTypeHash() ~= hash
-            ) then
-                return PARAM_BUILDING_TYPE, hash
-            end
-        elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
-            if (
-                newHash ~= GOV_WIDE_HASH and
-                self.queue:CanProduce(GOV_WIDE_HASH) and
-                self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
-            ) then
-                return PARAM_BUILDING_TYPE, GOV_WIDE_HASH
-            end
-        end
+    local currentQueueHashes = {}
+    local length = self.queue:GetSize()
+    for i = 0, length - 1 do
+        local item = self.queue:GetAt(i)
+        local info = GetInfoFromQueueItem(item)
+        currentQueueHashes[info.Hash] = true
     end
 
+    -- first turn of the classical era
+    -- if currentEraIndex == CLASSICAL_ERA_INDEX then
+    --     if (
+    --         self.wonderName == "BUILDING_STONEHENGE" or
+    --         self.wonderName == "BUILDING_PYRAMIDS"
+    --     ) then
+    --         local hash = GameInfo.Buildings[self.wonderName].Hash
+    --         if (
+    --             currentQueueHashes[hash] == nil and
+    --             self.queue:CanProduce(hash) and
+    --             self.queue:GetCurrentProductionTypeHash() ~= hash
+    --         ) then
+    --             return PARAM_BUILDING_TYPE, hash
+    --         end
+    --     elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
+    --         if (
+    --             currentQueueHashes[GOV_WIDE_HASH] == nil and
+    --             self.queue:CanProduce(GOV_WIDE_HASH) and
+    --             self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
+    --         ) then
+    --             return PARAM_BUILDING_TYPE, GOV_WIDE_HASH
+    --         end
+    --     end
+    -- end
+
     -- repair
-    local paramType, hash = self:FindRepairable(newHash)
+    local paramType, hash = self:FindRepairable(currentQueueHashes)
     if paramType ~= nil and hash ~= nil then
         return paramType, hash
     end
@@ -329,20 +363,20 @@ function CityProductionQueueManager:GetNewItemToWork(
     self:RefreshMapPinMapping()
 
     -- district for wonder
-    if self:CanBuildDistrictForWonder(newHash) then
+    if self:CanBuildDistrictForWonder(currentQueueHashes) then
         local info = GameInfo.Districts[self.prereqDistrict]
         local plotID = self.mapPinPlotsByName[self.prereqDistrict]
         return PARAM_DISTRICT_TYPE, info.Hash, plotID
     end
 
     -- building for wonder
-    hash = self:GetBuildingToBuildForWonder(newHash)
+    hash = self:GetBuildingToBuildForWonder(currentQueueHashes)
     if hash ~= nil then
         return PARAM_BUILDING_TYPE, hash
     end
 
     -- wonder
-    if self:CanBuildWonder(newHash) then
+    if self:CanBuildWonder(currentQueueHashes) then
         local info = GameInfo.Buildings[self.wonderName]
         local plotID = self.mapPinPlotsByName[self.wonderName]
         return PARAM_BUILDING_TYPE, info.Hash, plotID
@@ -350,7 +384,7 @@ function CityProductionQueueManager:GetNewItemToWork(
 
     -- finish district
     if hasBorderControlEffects then
-        local districtType = self:GetFinishDistrictBuild(newHash)
+        local districtType = self:GetFinishDistrictBuild(currentQueueHashes)
         if districtType ~= nil then
             local info = GameInfo.Districts[districtType]
             return PARAM_DISTRICT_TYPE, info.Hash
@@ -358,12 +392,12 @@ function CityProductionQueueManager:GetNewItemToWork(
     end
 
     -- finish wonder
-    if self:CanFinishWonder(currentEraIndex, newHash) then
+    if self:CanFinishWonder(currentEraIndex, currentQueueHashes) then
         return PARAM_BUILDING_TYPE, GameInfo.Buildings[self.wonderName].Hash
     end
 
     -- new district
-    local districtType = self:GetBuildNewDistrictType(newHash)
+    local districtType = self:GetBuildNewDistrictType(currentQueueHashes)
     if districtType ~= nil then
         local info = GameInfo.Districts[districtType]
         local plotID = self.mapPinPlotsByName[districtType]
@@ -371,27 +405,29 @@ function CityProductionQueueManager:GetNewItemToWork(
     end
 
     -- new building
-    local buildingType = self:GetBuildNewBuildingType(newHash)
+    local buildingType = self:GetBuildNewBuildingType(currentQueueHashes)
     if buildingType ~= nil then
         local info = GameInfo.Buildings[buildingType]
         return PARAM_BUILDING_TYPE, info.Hash
     end
 
     -- siege
-    hash = self:GetUnitToBuild("PROMOTION_CLASS_SIEGE", newHash)
+    hash = self:GetUnitToBuild("PROMOTION_CLASS_SIEGE", currentQueueHashes)
     if hash ~= nil then
         return PARAM_UNIT_TYPE, hash
     end
 
     -- heavy cavalry
-    hash = self:GetUnitToBuild("PROMOTION_CLASS_HEAVY_CAVALRY", newHash)
+    hash = self:GetUnitToBuild(
+        "PROMOTION_CLASS_HEAVY_CAVALRY", currentQueueHashes
+    )
     if hash ~= nil then
         return PARAM_UNIT_TYPE, hash
     end
 
     -- bread and circuses
     if (
-        newHash ~= BREAD_AND_CIRCUSES_HASH and
+        currentQueueHashes[BREAD_AND_CIRCUSES_HASH] == nil and
         self.queue:CanProduce(BREAD_AND_CIRCUSES_HASH)
     ) then
         return PARAM_PROJECT_TYPE, BREAD_AND_CIRCUSES_HASH
@@ -418,7 +454,8 @@ function CityProductionQueueManager:ShouldReactorBeRecommissioned()
     return false
 end
 
-function CityProductionQueueManager:FindRepairable(newHash)
+function CityProductionQueueManager:FindRepairable(currentQueueHashes)
+    currentQueueHashes = currentQueueHashes or {}
     for _, district in self.districts:Members() do
         local location = district:GetLocation()
         local districtBuildings = self.buildings:GetBuildingsAtLocation(
@@ -427,7 +464,7 @@ function CityProductionQueueManager:FindRepairable(newHash)
         for _, building in ipairs(districtBuildings) do
             local info = GameInfo.Buildings[building]
             if (
-                info.Hash ~= newHash and
+                currentQueueHashes[info.Hash] == nil and
                 self.buildings:IsPillaged(info.BuildingType)
                 and self.queue:CanProduce(info.Hash)
             ) then
@@ -437,7 +474,7 @@ function CityProductionQueueManager:FindRepairable(newHash)
 
         local info = GameInfo.Districts[district:GetType()]
         if (
-            info.Hash ~= newHash and
+            currentQueueHashes[info.Hash] == nil and
             district:IsPillaged() and
             self.queue:CanProduce(info.Hash)
         ) then
@@ -453,13 +490,15 @@ function CityProductionQueueManager:HasBuilderMapPin(newHash)
     )
 end
 
-function CityProductionQueueManager:CanBuildDistrictForWonder(newHash)
+function CityProductionQueueManager:CanBuildDistrictForWonder(
+    currentQueueHashes
+)
     if self.prereqDistrict == nil then
         return false
     end
 
     local info = GameInfo.Districts[self.prereqDistrict]
-    if info.Hash == newHash then
+    if currentQueueHashes[info.Hash] ~= nil then
         return false
     end
 
@@ -471,20 +510,23 @@ function CityProductionQueueManager:CanBuildDistrictForWonder(newHash)
     return self.mapPinPlotsByName[districtType] ~= nil
 end
 
-function CityProductionQueueManager:GetBuildingToBuildForWonder(newHash)
+function CityProductionQueueManager:GetBuildingToBuildForWonder(currentQueueHashes)
     if self.prereqBuildings == nil or #self.prereqBuildings == 0 then
         return nil
     end
 
-    if self.prereqBuildingHashes[newHash] ~= nil then
-        return nil
+    -- TODO: Test to make sure alter is not in the queue twice on turn 57/58
+    for hash in pairs(currentQueueHashes) do
+        if self.prereqBuildingHashes[hash] ~= nil then
+            return nil
+        end
     end
 
     for i = 1, #self.prereqBuildings do
         local building = self.prereqBuildings[i]
         local info = GameInfo.Buildings[building]
         if (
-            info.Hash ~= newHash and
+            currentQueueHashes[info.Hash] == nil and
             self.queue:CanProduce(info.Hash)
         ) then
             if not ExposedMembers.ProductionPanel.IsBuildingBlocked(
@@ -501,11 +543,13 @@ function CityProductionQueueManager:GetBuildingToBuildForWonder(newHash)
     return nil
 end
 
-function CityProductionQueueManager:CanFinishWonder(currentEraIndex, newHash)
+function CityProductionQueueManager:CanFinishWonder(
+    currentEraIndex, currentQueueHashes
+)
     local wonderInfo = GameInfo.Buildings[self.wonderName]
     if (
         wonderInfo ~= nil and
-        wonderInfo.Hash ~= newHash
+        currentQueueHashes[wonderInfo.Hash] == nil
     ) then
         local district = self.districts:GetDistrict(WONDER_INDEX)
         if district ~= nil then
@@ -524,7 +568,7 @@ function CityProductionQueueManager:CanFinishWonder(currentEraIndex, newHash)
     return false
 end
 
-function CityProductionQueueManager:CanBuildWonder(newHash)
+function CityProductionQueueManager:CanBuildWonder(currentQueueHashes)
     local plotID = self.mapPinPlotsByName[self.wonderName]
     if plotID == nil then
         return false
@@ -540,7 +584,7 @@ function CityProductionQueueManager:CanBuildWonder(newHash)
     end
 
     local row = GameInfo.Buildings[self.wonderName]
-    if row.Hash == newHash then
+    if currentQueueHashes[row.Hash] ~= nil then
         return
     end
 
@@ -552,12 +596,12 @@ function CityProductionQueueManager:CanBuildWonder(newHash)
     return self.queue:CanProduce(row.Hash)
 end
 
-function CityProductionQueueManager:GetFinishDistrictBuild(newHash)
+function CityProductionQueueManager:GetFinishDistrictBuild(currentQueueHashes)
     for _, district in self.districts:Members() do
         if not district:IsComplete() then
             local districtType = district:GetType()
             local info = GameInfo.Districts[districtType]
-            if info.Hash ~= newHash then
+            if currentQueueHashes[info.Hash] == nil then
                 return districtType
             end
         end
@@ -566,7 +610,7 @@ function CityProductionQueueManager:GetFinishDistrictBuild(newHash)
     return nil
 end
 
-function CityProductionQueueManager:GetBuildNewDistrictType(newHash)
+function CityProductionQueueManager:GetBuildNewDistrictType(currentQueueHashes)
     for i = 1, #DistrictBuildOrder do
         local districtType = DistrictBuildOrder[i]
         local info = GameInfo.Districts[districtType]
@@ -580,7 +624,7 @@ function CityProductionQueueManager:GetBuildNewDistrictType(newHash)
                 and city:GetID() == self.cityID
             ) then
                 if (
-                    info.Hash ~= newHash and
+                    currentQueueHashes[info.Hash] == nil and
                     self.queue:CanProduce(info.Hash) and
                     self:CanProduceDistrict(districtType) and
                     not ExposedMembers.ProductionPanel.IsDistrictBlocked(
@@ -598,7 +642,7 @@ function CityProductionQueueManager:GetBuildNewDistrictType(newHash)
     return nil
 end
 
-function CityProductionQueueManager:GetBuildNewBuildingType(newHash)
+function CityProductionQueueManager:GetBuildNewBuildingType(currentQueueHashes)
     for i = 1, #DistrictBuildOrder do
         local districtType = DistrictBuildOrder[i]
         local info = GameInfo.Districts[districtType]
@@ -606,7 +650,7 @@ function CityProductionQueueManager:GetBuildNewBuildingType(newHash)
             for n = 1, #info.BuildingCollectionReference do
                 local row = info.BuildingCollectionReference[n]
                 if (
-                    row.Hash ~= newHash and
+                    currentQueueHashes[row.Hash] == nil and
                     not row.InternalOnly and
                     self.queue:CanProduce(row.Hash) and
                     not ExposedMembers.ProductionPanel.IsBuildingBlocked(
@@ -626,7 +670,9 @@ function CityProductionQueueManager:GetBuildNewBuildingType(newHash)
     end
 end
 
-function CityProductionQueueManager:GetUnitToBuild(promotionClass, newHash)
+function CityProductionQueueManager:GetUnitToBuild(
+    promotionClass, currentQueueHashes
+)
     local allowedCount = UnitPromotionClassCounts[promotionClass]
     if allowedCount == nil then
         return nil
@@ -641,7 +687,7 @@ function CityProductionQueueManager:GetUnitToBuild(promotionClass, newHash)
 
     for row in GameInfo.Units() do
         if (
-            row.Hash ~= newHash and
+            currentQueueHashes[row.Hash] == nil and
             row.PromotionClass == promotionClass
             and self.queue:CanProduce(row.Hash)
         ) then

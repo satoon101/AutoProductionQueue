@@ -26,26 +26,45 @@ function UpdateItemsInQueue(playerID)
     for _, city in cities:Members() do
         local obj = CityProductionQueueManager:new(playerID, city:GetID())
         if obj ~= nil then
-            local hash = nil
+
+            -- Does the first item in the queue need to wait to be finished?
             if obj:FirstQueueItemNeedsReplaced(
                 hasBorderControlEffects, currentEraIndex
             ) then
+
+                -- Find a replacement item
                 local paramType, replaceHash, plotID = obj:GetNewItemToWork(
                     hasBorderControlEffects, currentEraIndex
                 )
-                hash = replaceHash
                 ReplaceIndexInQueue(city, 0, replaceHash, paramType, plotID)
             end
+
+            -- Does a second item need added to the queue?
+            -- This is done so that no queue is ever empty
             if obj:NeedsNewItemToWork() then
                 local paramType, newHash, plotID = obj:GetNewItemToWork(
-                    hasBorderControlEffects, currentEraIndex, hash
+                    hasBorderControlEffects, currentEraIndex
                 )
                 AppendItemToQueue(city, newHash, paramType, plotID)
             end
         end
-        local paramType, hash = obj:FindItemToPrependQueue()
+
+        -- Is there an item that needs pushed to the front of the queue?
+        local paramType, hash = obj:FindItemToPrependQueue(currentEraIndex)
         if paramType ~= nil and hash ~= nil then
-            PrependItemToQueue(city, hash, paramType)
+            local index = obj:GetItemIndexFromCurrentQueue(hash)
+
+            -- If the item is NOT already in the queue, prepend it
+            if index == nil then
+                PrependItemToQueue(city, hash, paramType)
+
+            -- If the item IS already in the queue, make sure it is first
+            elseif index > 0 then
+                SwapItemsInQueue(city, 0, index)
+            end
+
+            -- If we're adding a builder, it is due to the map pin
+            --      so we need to remove the pin
             if hash == BUILDER_HASH then
                 obj:RemoveBuilderMapPin()
             end
