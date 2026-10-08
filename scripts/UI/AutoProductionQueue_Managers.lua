@@ -515,7 +515,6 @@ function CityProductionQueueManager:GetBuildingToBuildForWonder(currentQueueHash
         return nil
     end
 
-    -- TODO: Test to make sure alter is not in the queue twice on turn 57/58
     for hash in pairs(currentQueueHashes) do
         if self.prereqBuildingHashes[hash] ~= nil then
             return nil
