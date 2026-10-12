@@ -184,30 +184,6 @@ function CityProductionQueueManager:FirstQueueItemNeedsReplaced(
         return false
     end
 
-    -- if currentEraIndex == CLASSICAL_ERA_INDEX then
-    --     -- Stonehenge, Pyramids, and Ancestral Hall should be completed
-    --     --      asap in the Classical era.
-    --     if (
-    --         self.wonderName == "BUILDING_STONEHENGE" or
-    --         self.wonderName == "BUILDING_PYRAMIDS"
-    --     ) then
-    --         local hash = GameInfo.Buildings[self.wonderName].Hash
-    --         if (
-    --             self.queue:CanProduce(hash) and
-    --             self.queue:GetCurrentProductionTypeHash() ~= hash
-    --         ) then
-    --             return true
-    --         end
-    --     elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
-    --         if (
-    --             self.queue:CanProduce(GOV_WIDE_HASH) and
-    --             self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
-    --         ) then
-    --             return true
-    --         end
-    --     end
-    -- end
-
     if self.queue:GetTurnsLeft(info.Hash) > 1 then
         return false
     end
@@ -270,6 +246,11 @@ function CityProductionQueueManager:FindItemToPrependQueue(currentEraIndex)
         return paramType, hash
     end
 
+    -- archaeologist
+    if self.queue:CanProduce(ARCHAEOLOGIST_HASH) then
+        return PARAM_UNIT_TYPE, ARCHAEOLOGIST_HASH
+    end
+
     -- builder
     if (
         self.mapPinPlotsByName["UNIT_BUILDER"] ~= nil and
@@ -328,31 +309,6 @@ function CityProductionQueueManager:GetNewItemToWork(
         local info = GetInfoFromQueueItem(item)
         currentQueueHashes[info.Hash] = true
     end
-
-    -- first turn of the classical era
-    -- if currentEraIndex == CLASSICAL_ERA_INDEX then
-    --     if (
-    --         self.wonderName == "BUILDING_STONEHENGE" or
-    --         self.wonderName == "BUILDING_PYRAMIDS"
-    --     ) then
-    --         local hash = GameInfo.Buildings[self.wonderName].Hash
-    --         if (
-    --             currentQueueHashes[hash] == nil and
-    --             self.queue:CanProduce(hash) and
-    --             self.queue:GetCurrentProductionTypeHash() ~= hash
-    --         ) then
-    --             return PARAM_BUILDING_TYPE, hash
-    --         end
-    --     elseif self.wonderName == "BUILDING_CASA_DE_CONTRATACION" then
-    --         if (
-    --             currentQueueHashes[GOV_WIDE_HASH] == nil and
-    --             self.queue:CanProduce(GOV_WIDE_HASH) and
-    --             self.queue:GetCurrentProductionTypeHash() ~= GOV_WIDE_HASH
-    --         ) then
-    --             return PARAM_BUILDING_TYPE, GOV_WIDE_HASH
-    --         end
-    --     end
-    -- end
 
     -- repair
     local paramType, hash = self:FindRepairable(currentQueueHashes)

@@ -50,13 +50,13 @@ function UpdateItemsInQueue(playerID)
         end
 
         -- Is there an item that needs pushed to the front of the queue?
-        local paramType, hash = obj:FindItemToPrependQueue(currentEraIndex)
-        if paramType ~= nil and hash ~= nil then
-            local index = obj:GetItemIndexFromCurrentQueue(hash)
+        local paramType, prependHash = obj:FindItemToPrependQueue(currentEraIndex)
+        if paramType ~= nil and prependHash ~= nil then
+            local index = obj:GetItemIndexFromCurrentQueue(prependHash)
 
             -- If the item is NOT already in the queue, prepend it
             if index == nil then
-                PrependItemToQueue(city, hash, paramType)
+                PrependItemToQueue(city, prependHash, paramType)
 
             -- If the item IS already in the queue, make sure it is first
             elseif index > 0 then
@@ -65,7 +65,7 @@ function UpdateItemsInQueue(playerID)
 
             -- If we're adding a builder, it is due to the map pin
             --      so we need to remove the pin
-            if hash == BUILDER_HASH then
+            if prependHash == BUILDER_HASH then
                 obj:RemoveBuilderMapPin()
             end
         end
